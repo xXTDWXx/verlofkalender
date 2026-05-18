@@ -180,10 +180,12 @@ async function loadRemoteData() {
     supabaseClient
       .from("organizations")
       .select("id,name,leave_start,overtime_start,color,created_at")
+      .eq("user_id", currentUser.id)
       .order("created_at", { ascending: true }),
     supabaseClient
       .from("entries")
       .select("id,organization_id,entry_date,entry_type,hours,note,created_at")
+      .eq("user_id", currentUser.id)
       .order("entry_date", { ascending: true })
       .order("created_at", { ascending: true }),
   ]);
@@ -303,7 +305,11 @@ async function deleteEntry(entryId) {
   if (!currentUser || isLoading) return;
 
   setBusy(true, "Registratie verwijderen...");
-  const { error } = await supabaseClient.from("entries").delete().eq("id", entryId);
+  const { error } = await supabaseClient
+    .from("entries")
+    .delete()
+    .eq("id", entryId)
+    .eq("user_id", currentUser.id);
 
   if (error) {
     showToast("Registratie verwijderen mislukt.");
@@ -328,7 +334,11 @@ async function deleteOrganization(orgId) {
   }
 
   setBusy(true, "Organisatie verwijderen...");
-  const { error } = await supabaseClient.from("organizations").delete().eq("id", orgId);
+  const { error } = await supabaseClient
+    .from("organizations")
+    .delete()
+    .eq("id", orgId)
+    .eq("user_id", currentUser.id);
 
   if (error) {
     showToast("Organisatie verwijderen mislukt.");
