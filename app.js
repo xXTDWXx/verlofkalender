@@ -204,7 +204,7 @@ function renderBalances() {
           </span>
           <strong class="summary-balance">${formatHours(balance)}</strong>
         </header>
-        <small>${formatHours(leaveUsed)} verlof gebruikt &middot; ${formatHours(overtimeAdded)} overuren erbij</small>
+        <small>${formatHours(leaveUsed)} verlof gebruikt · ${formatHours(overtimeAdded)} overuren erbij</small>
       </article>
     `).join("")
     : `<div class="empty-state">Nog geen organisaties. Voeg er een toe om te starten.</div>`;
@@ -227,18 +227,27 @@ function renderCalendar() {
 
   elements.calendarGrid.innerHTML = days.map((day) => {
     const dateKey = toDateInputValue(day);
-    const entries = state.entries.filter((entry) => entry.date === dateKey);
+    const entries = state.entries
+      .filter((entry) => entry.date === dateKey)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     const isOutside = day.getMonth() !== visibleMonth.getMonth();
     const isSelected = dateKey === selectedDate;
     const isToday = dateKey === toDateInputValue(new Date());
-    const totals = summarizeDayEntries(entries);
+    const visibleEntries = entries.slice(0, 3);
+    const hiddenCount = entries.length - visibleEntries.length;
 
     return `
       <button class="calendar-day ${isOutside ? "outside" : ""} ${isSelected ? "selected" : ""} ${isToday ? "today" : ""}" type="button" data-date="${dateKey}" aria-label="${dateFormatter.format(day)}">
         <span class="date-number">${day.getDate()}</span>
         <span class="day-totals">
-          ${totals.leave ? `<span class="day-pill" style="background:var(--leave)"><span>Verlof</span><span>-${formatHours(totals.leave)}</span></span>` : ""}
-          ${totals.overtime ? `<span class="day-pill" style="background:var(--overtime)"><span>Overuren</span><span>+${formatHours(totals.overtime)}</span></span>` : ""}
+          ${visibleEntries.map((entry) => {
+            const isLeave = entry.type === "leave";
+            const fallbackLabel = isLeave ? "Verlof" : "Overuren";
+            const label = entry.note || fallbackLabel;
+            const sign = isLeave ? "-" : "+";
+            return `<span class="day-pill" style="background:var(--${entry.type === "leave" ? "leave" : "overtime"})"><span class="pill-note">${escapeHtml(label)}</span><span class="pill-hours">${sign}${formatHours(entry.hours)}</span></span>`;
+          }).join("")}
+          ${hiddenCount > 0 ? `<span class="day-more">+${hiddenCount} meer</span>` : ""}
         </span>
       </button>
     `;
