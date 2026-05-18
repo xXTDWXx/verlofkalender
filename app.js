@@ -198,10 +198,12 @@ function renderBalances() {
     ? totals.map(({ org, balance, leaveUsed, overtimeAdded }) => `
       <article class="summary-card">
         <header>
-          <span>${escapeHtml(org.name)}</span>
-          <i class="color-dot" style="background:${escapeHtml(org.color)}"></i>
+          <span class="summary-org-name">
+            <i class="color-dot" style="background:${escapeHtml(org.color)}"></i>
+            ${escapeHtml(org.name)}
+          </span>
+          <strong class="summary-balance">${formatHours(balance)}</strong>
         </header>
-        <strong>${formatHours(balance)}</strong>
         <small>${formatHours(leaveUsed)} verlof gebruikt &middot; ${formatHours(overtimeAdded)} overuren erbij</small>
       </article>
     `).join("")
