@@ -182,6 +182,16 @@ body.is-loading {
   cursor: progress;
 }
 
+body.is-authenticated #authView {
+  display: none !important;
+}
+
+body.is-signed-out #appContent,
+body.is-signed-out #mainTabs,
+body.is-signed-out #userStrip {
+  display: none !important;
+}
+
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
