@@ -1,4 +1,10 @@
-const STORAGE_KEY = "verlofuren-planner-state-v1";
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+
+const SUPABASE_URL = "https://olntwuzkmxoyzaursdoz.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_XfSKuuPObdCSB6h2TchoaQ_GdUZ8ns7";
+const LEGACY_STORAGE_KEY = "verlofuren-planner-state-v1";
+
+const supabaseClient = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const monthFormatter = new Intl.DateTimeFormat("nl-NL", { month: "long", year: "numeric" });
 const dateFormatter = new Intl.DateTimeFormat("nl-NL", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 const shortDateFormatter = new Intl.DateTimeFormat("nl-NL", { day: "numeric", month: "short", year: "numeric" });
@@ -8,12 +14,24 @@ const defaultState = {
   entries: [],
 };
 
-let state = loadState();
+let state = structuredClone(defaultState);
 let selectedDate = toDateInputValue(new Date());
 let visibleMonth = startOfMonth(new Date());
+let currentUser = null;
+let isLoading = false;
 
 const elements = {
   totalBalance: document.querySelector("#totalBalance"),
+  authView: document.querySelector("#authView"),
+  authForm: document.querySelector("#authForm"),
+  authEmail: document.querySelector("#authEmail"),
+  authPassword: document.querySelector("#authPassword"),
+  authStatus: document.querySelector("#authStatus"),
+  signOutButton: document.querySelector("#signOutButton"),
+  userStrip: document.querySelector("#userStrip"),
+  userEmail: document.querySelector("#userEmail"),
+  mainTabs: document.querySelector("#mainTabs"),
+  appContent: document.querySelector("#appContent"),
   summaryGrid: document.querySelector("#summaryGrid"),
   monthLabel: document.querySelector("#monthLabel"),
   calendarGrid: document.querySelector("#calendarGrid"),
@@ -49,8 +67,184 @@ document.querySelector("#nextMonth").addEventListener("click", () => {
   render();
 });
 
-elements.entryForm.addEventListener("submit", (event) => {
+elements.authForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  await signIn();
+});
+
+elements.signOutButton.addEventListener("click", async () => {
+  await supabaseClient.auth.signOut();
+});
+
+elements.entryForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await createEntry();
+});
+
+elements.orgForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await createOrganization();
+});
+
+elements.filterOrg.addEventListener("change", renderEntryList);
+elements.filterType.addEventListener("change", renderEntryList);
+
+elements.calendarGrid.addEventListener("click", (event) => {
+  const dayButton = event.target.closest(".calendar-day");
+  if (!dayButton) return;
+
+  selectedDate = dayButton.dataset.date;
+  visibleMonth = startOfMonth(parseLocalDate(selectedDate));
+  render();
+});
+
+document.addEventListener("click", async (event) => {
+  const deleteEntryButton = event.target.closest("[data-delete-entry]");
+  const deleteOrgButton = event.target.closest("[data-delete-org]");
+
+  if (deleteEntryButton) {
+    await deleteEntry(deleteEntryButton.dataset.deleteEntry);
+  }
+
+  if (deleteOrgButton) {
+    await deleteOrganization(deleteOrgButton.dataset.deleteOrg);
+  }
+});
+
+initialize();
+
+async function initialize() {
+  setBusy(true, "Sessie controleren...");
+  const { data, error } = await supabaseClient.auth.getSession();
+
+  if (error) {
+    showAuthStatus(error.message, true);
+  }
+
+  await applySession(data?.session || null);
+
+  supabaseClient.auth.onAuthStateChange((_event, session) => {
+    applySession(session);
+  });
+}
+
+async function applySession(session) {
+  currentUser = session?.user || null;
+  elements.authView.classList.toggle("hidden", Boolean(currentUser));
+  elements.appContent.classList.toggle("hidden", !currentUser);
+  elements.mainTabs.classList.toggle("hidden", !currentUser);
+  elements.userStrip.classList.toggle("hidden", !currentUser);
+  elements.userEmail.textContent = currentUser?.email || "";
+
+  if (!currentUser) {
+    state = structuredClone(defaultState);
+    elements.totalBalance.textContent = "0u";
+    render();
+    setBusy(false);
+    return;
+  }
+
+  await loadRemoteData();
+}
+
+async function signIn() {
+  const email = elements.authEmail.value.trim();
+  const password = elements.authPassword.value;
+  setBusy(true, "Inloggen...");
+
+  const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if (error) {
+    showAuthStatus("Inloggen mislukt: " + error.message, true);
+    setBusy(false);
+    return;
+  }
+
+  elements.authPassword.value = "";
+  showAuthStatus("");
+}
+
+async function loadRemoteData() {
+  if (!currentUser) return;
+  setBusy(true, "Gegevens laden...");
+
+  const [organizationsResult, entriesResult] = await Promise.all([
+    supabaseClient
+      .from("organizations")
+      .select("id,name,leave_start,overtime_start,color,created_at")
+      .order("created_at", { ascending: true }),
+    supabaseClient
+      .from("entries")
+      .select("id,organization_id,entry_date,entry_type,hours,note,created_at")
+      .order("entry_date", { ascending: true })
+      .order("created_at", { ascending: true }),
+  ]);
+
+  if (organizationsResult.error || entriesResult.error) {
+    const message = organizationsResult.error?.message || entriesResult.error?.message;
+    showToast("Supabase kon de gegevens niet laden.");
+    showAuthStatus("Controleer of de tabellen en policies zijn aangemaakt. Fout: " + message, true);
+    setBusy(false);
+    return;
+  }
+
+  state = {
+    organizations: organizationsResult.data.map(mapOrganizationFromDb),
+    entries: entriesResult.data.map(mapEntryFromDb),
+  };
+
+  maybeOfferLocalImport();
+  render();
+  setBusy(false);
+}
+
+async function createOrganization() {
+  if (!currentUser || isLoading) return;
+
+  const name = elements.orgName.value.trim();
+  const leaveStart = Number.parseFloat(elements.orgLeaveStart.value);
+  const overtimeStart = Number.parseFloat(elements.orgOvertimeStart.value);
+
+  if (!name) {
+    showToast("Vul een organisatienaam in.");
+    return;
+  }
+
+  if (!Number.isFinite(leaveStart) || !Number.isFinite(overtimeStart)) {
+    showToast("Vul geldige beginsaldi in.");
+    return;
+  }
+
+  setBusy(true, "Organisatie opslaan...");
+  const { data, error } = await supabaseClient
+    .from("organizations")
+    .insert({
+      user_id: currentUser.id,
+      name,
+      leave_start: roundHours(leaveStart),
+      overtime_start: roundHours(overtimeStart),
+      color: elements.orgColor.value,
+    })
+    .select("id,name,leave_start,overtime_start,color,created_at")
+    .single();
+
+  if (error) {
+    showToast("Organisatie opslaan mislukt.");
+    showAuthStatus(error.message, true);
+    setBusy(false);
+    return;
+  }
+
+  state.organizations.push(mapOrganizationFromDb(data));
+  elements.orgForm.reset();
+  elements.orgColor.value = "#1d8f86";
+  showToast("Organisatie toegevoegd.");
+  render();
+  setBusy(false);
+}
+
+async function createEntry() {
+  if (!currentUser || isLoading) return;
+
   const organizationId = elements.entryOrg.value;
   const hours = Number.parseFloat(elements.entryHours.value);
   const type = new FormData(elements.entryForm).get("entryType");
@@ -67,105 +261,77 @@ elements.entryForm.addEventListener("submit", (event) => {
     return;
   }
 
-  state.entries.push({
-    id: crypto.randomUUID(),
-    organizationId,
-    date: selectedDate,
-    type,
-    hours: roundHours(hours),
-    note,
-    createdAt: new Date().toISOString(),
-  });
+  setBusy(true, "Uren opslaan...");
+  const { data, error } = await supabaseClient
+    .from("entries")
+    .insert({
+      user_id: currentUser.id,
+      organization_id: organizationId,
+      entry_date: selectedDate,
+      entry_type: type,
+      hours: roundHours(hours),
+      note,
+    })
+    .select("id,organization_id,entry_date,entry_type,hours,note,created_at")
+    .single();
 
-  saveState();
+  if (error) {
+    showToast("Uren opslaan mislukt.");
+    showAuthStatus(error.message, true);
+    setBusy(false);
+    return;
+  }
+
+  state.entries.push(mapEntryFromDb(data));
   elements.entryHours.value = "";
   elements.entryNote.value = "";
   showToast(type === "leave" ? "Verlofuren opgeslagen." : "Overuren opgeslagen.");
   render();
-});
-
-elements.orgForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  const name = elements.orgName.value.trim();
-  const leaveStart = Number.parseFloat(elements.orgLeaveStart.value);
-  const overtimeStart = Number.parseFloat(elements.orgOvertimeStart.value);
-
-  if (!name) {
-    showToast("Vul een organisatienaam in.");
-    return;
-  }
-
-  if (!Number.isFinite(leaveStart) || !Number.isFinite(overtimeStart)) {
-    showToast("Vul geldige beginsaldi in.");
-    return;
-  }
-
-  state.organizations.push({
-    id: crypto.randomUUID(),
-    name,
-    leaveStart: roundHours(leaveStart),
-    overtimeStart: roundHours(overtimeStart),
-    color: elements.orgColor.value,
-  });
-
-  saveState();
-  elements.orgForm.reset();
-  elements.orgColor.value = "#1d8f86";
-  showToast("Organisatie toegevoegd.");
-  render();
-});
-
-elements.filterOrg.addEventListener("change", renderEntryList);
-elements.filterType.addEventListener("change", renderEntryList);
-
-elements.calendarGrid.addEventListener("click", (event) => {
-  const dayButton = event.target.closest(".calendar-day");
-  if (!dayButton) return;
-
-  selectedDate = dayButton.dataset.date;
-  visibleMonth = startOfMonth(parseLocalDate(selectedDate));
-  render();
-});
-
-document.addEventListener("click", (event) => {
-  const deleteEntryButton = event.target.closest("[data-delete-entry]");
-  const deleteOrgButton = event.target.closest("[data-delete-org]");
-
-  if (deleteEntryButton) {
-    deleteEntry(deleteEntryButton.dataset.deleteEntry);
-  }
-
-  if (deleteOrgButton) {
-    deleteOrganization(deleteOrgButton.dataset.deleteOrg);
-  }
-});
-
-render();
-
-function loadState() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (!saved) return structuredClone(defaultState);
-    const parsed = JSON.parse(saved);
-    if (!Array.isArray(parsed.organizations) || !Array.isArray(parsed.entries)) {
-      return structuredClone(defaultState);
-    }
-    parsed.organizations = parsed.organizations.filter((org) => {
-      const isUnusedExample =
-        org.name === "Mijn organisatie" &&
-        Number(org.leaveStart) === 160 &&
-        Number(org.overtimeStart) === 0 &&
-        !parsed.entries.some((entry) => entry.organizationId === org.id);
-      return !isUnusedExample;
-    });
-    return parsed;
-  } catch {
-    return structuredClone(defaultState);
-  }
+  setBusy(false);
 }
 
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+async function deleteEntry(entryId) {
+  if (!currentUser || isLoading) return;
+
+  setBusy(true, "Registratie verwijderen...");
+  const { error } = await supabaseClient.from("entries").delete().eq("id", entryId);
+
+  if (error) {
+    showToast("Registratie verwijderen mislukt.");
+    showAuthStatus(error.message, true);
+    setBusy(false);
+    return;
+  }
+
+  state.entries = state.entries.filter((entry) => entry.id !== entryId);
+  showToast("Registratie verwijderd.");
+  render();
+  setBusy(false);
+}
+
+async function deleteOrganization(orgId) {
+  if (!currentUser || isLoading) return;
+
+  const hasEntries = state.entries.some((entry) => entry.organizationId === orgId);
+  if (hasEntries) {
+    showToast("Verwijder eerst de registraties van deze organisatie.");
+    return;
+  }
+
+  setBusy(true, "Organisatie verwijderen...");
+  const { error } = await supabaseClient.from("organizations").delete().eq("id", orgId);
+
+  if (error) {
+    showToast("Organisatie verwijderen mislukt.");
+    showAuthStatus(error.message, true);
+    setBusy(false);
+    return;
+  }
+
+  state.organizations = state.organizations.filter((org) => org.id !== orgId);
+  showToast("Organisatie verwijderd.");
+  render();
+  setBusy(false);
 }
 
 function render() {
@@ -204,7 +370,7 @@ function renderBalances() {
           </span>
           <strong class="summary-balance">${formatHours(balance)}</strong>
         </header>
-        <small>${formatHours(leaveUsed)} verlof gebruikt · ${formatHours(overtimeAdded)} overuren erbij</small>
+        <small>${formatHours(leaveUsed)} verlof gebruikt &middot; ${formatHours(overtimeAdded)} overuren erbij</small>
       </article>
     `).join("")
     : `<div class="empty-state">Nog geen organisaties. Voeg er een toe om te starten.</div>`;
@@ -326,23 +492,116 @@ function renderEntryItem(entry) {
   `;
 }
 
-function deleteEntry(entryId) {
-  state.entries = state.entries.filter((entry) => entry.id !== entryId);
-  saveState();
-  showToast("Registratie verwijderd.");
-  render();
+function maybeOfferLocalImport() {
+  const legacyState = readLegacyState();
+  if (!legacyState || legacyState.organizations.length === 0 || state.organizations.length > 0) return;
+
+  elements.summaryGrid.innerHTML = `
+    <div class="empty-state">
+      Lokale gegevens gevonden op dit toestel.
+      <button class="ghost-button" type="button" id="importLocalButton">Importeer naar Supabase</button>
+    </div>
+  `;
+  document.querySelector("#importLocalButton")?.addEventListener("click", importLegacyState);
 }
 
-function deleteOrganization(orgId) {
-  const hasEntries = state.entries.some((entry) => entry.organizationId === orgId);
-  if (hasEntries) {
-    showToast("Verwijder eerst de registraties van deze organisatie.");
-    return;
+async function importLegacyState() {
+  const legacyState = readLegacyState();
+  if (!legacyState || !currentUser) return;
+
+  setBusy(true, "Lokale gegevens importeren...");
+  const orgIdMap = new Map();
+
+  for (const org of legacyState.organizations) {
+    const { data, error } = await supabaseClient
+      .from("organizations")
+      .insert({
+        user_id: currentUser.id,
+        name: org.name,
+        leave_start: org.leaveStart,
+        overtime_start: org.overtimeStart,
+        color: org.color || "#1d8f86",
+      })
+      .select("id")
+      .single();
+
+    if (error) {
+      showToast("Importeren mislukt.");
+      showAuthStatus(error.message, true);
+      setBusy(false);
+      return;
+    }
+    orgIdMap.set(org.id, data.id);
   }
-  state.organizations = state.organizations.filter((org) => org.id !== orgId);
-  saveState();
-  showToast("Organisatie verwijderd.");
-  render();
+
+  const entries = legacyState.entries
+    .filter((entry) => orgIdMap.has(entry.organizationId))
+    .map((entry) => ({
+      user_id: currentUser.id,
+      organization_id: orgIdMap.get(entry.organizationId),
+      entry_date: entry.date,
+      entry_type: entry.type,
+      hours: entry.hours,
+      note: entry.note || "",
+      created_at: entry.createdAt || new Date().toISOString(),
+    }));
+
+  if (entries.length) {
+    const { error } = await supabaseClient.from("entries").insert(entries);
+    if (error) {
+      showToast("Importeren van registraties mislukt.");
+      showAuthStatus(error.message, true);
+      setBusy(false);
+      return;
+    }
+  }
+
+  localStorage.removeItem(LEGACY_STORAGE_KEY);
+  showToast("Lokale gegevens geimporteerd.");
+  await loadRemoteData();
+}
+
+function readLegacyState() {
+  try {
+    const saved = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (!saved) return null;
+    const parsed = JSON.parse(saved);
+    if (!Array.isArray(parsed.organizations) || !Array.isArray(parsed.entries)) return null;
+    parsed.organizations = parsed.organizations.filter((org) => {
+      const isUnusedExample =
+        org.name === "Mijn organisatie" &&
+        Number(org.leaveStart) === 160 &&
+        Number(org.overtimeStart) === 0 &&
+        !parsed.entries.some((entry) => entry.organizationId === org.id);
+      return !isUnusedExample;
+    });
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function mapOrganizationFromDb(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    leaveStart: Number(row.leave_start),
+    overtimeStart: Number(row.overtime_start),
+    color: row.color || "#1d8f86",
+    createdAt: row.created_at,
+  };
+}
+
+function mapEntryFromDb(row) {
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    date: row.entry_date,
+    type: row.entry_type,
+    hours: Number(row.hours),
+    note: row.note || "",
+    createdAt: row.created_at,
+  };
 }
 
 function calculateBalance(org, entries) {
@@ -370,13 +629,6 @@ function getCalendarDays(monthDate) {
     day.setDate(start.getDate() + index);
     return day;
   });
-}
-
-function summarizeDayEntries(entries) {
-  return entries.reduce((totals, entry) => {
-    totals[entry.type] += entry.hours;
-    return totals;
-  }, { leave: 0, overtime: 0 });
 }
 
 function getEntriesForDate(dateKey) {
@@ -424,6 +676,21 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function setBusy(busy, message = "") {
+  isLoading = busy;
+  document.body.classList.toggle("is-loading", busy);
+  elements.authStatus.textContent = message;
+  document.querySelectorAll("button, input, select").forEach((element) => {
+    if (element.id === "signOutButton") return;
+    element.disabled = busy;
+  });
+}
+
+function showAuthStatus(message, isError = false) {
+  elements.authStatus.textContent = message;
+  elements.authStatus.classList.toggle("error", isError);
 }
 
 let toastTimeout;
