@@ -73,7 +73,14 @@ elements.authForm.addEventListener("submit", async (event) => {
 });
 
 elements.signOutButton.addEventListener("click", async () => {
-  await supabaseClient.auth.signOut();
+  setBusy(true, "Uitloggen...");
+  const { error } = await supabaseClient.auth.signOut();
+  if (error) {
+    showAuthStatus("Uitloggen mislukt: " + error.message, true);
+    setBusy(false);
+    return;
+  }
+  await applySession(null);
 });
 
 elements.entryForm.addEventListener("submit", async (event) => {
@@ -130,6 +137,8 @@ async function initialize() {
 
 async function applySession(session) {
   currentUser = session?.user || null;
+  document.body.classList.toggle("is-authenticated", Boolean(currentUser));
+  document.body.classList.toggle("is-signed-out", !currentUser);
   elements.authView.classList.toggle("hidden", Boolean(currentUser));
   elements.appContent.classList.toggle("hidden", !currentUser);
   elements.mainTabs.classList.toggle("hidden", !currentUser);
