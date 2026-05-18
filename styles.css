@@ -244,6 +244,7 @@ main {
 
 .calendar-day {
   min-height: 118px;
+  min-width: 0;
   padding: 9px;
   color: inherit;
   text-align: left;
@@ -294,11 +295,39 @@ main {
   justify-content: space-between;
   gap: 6px;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   border-radius: 6px;
   padding: 4px 6px;
   color: #fff;
   font-size: 0.76rem;
   font-weight: 800;
+  overflow: hidden;
+}
+
+.pill-note {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pill-hours {
+  flex: 0 0 auto;
+  min-width: max-content;
+}
+
+.day-more {
+  display: block;
+  border-radius: 6px;
+  padding: 3px 6px;
+  background: #eef1f5;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-align: center;
 }
 
 .stack {
@@ -568,13 +597,9 @@ select:focus {
   }
 
   .day-pill {
-    justify-content: center;
+    justify-content: space-between;
     padding: 3px;
     font-size: 0.68rem;
-  }
-
-  .day-pill span:first-child {
-    display: none;
   }
 
   .list-toolbar,
