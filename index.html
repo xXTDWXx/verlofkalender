@@ -16,137 +16,164 @@
         <span>Totaalsaldo</span>
         <strong id="totalBalance">0u</strong>
       </div>
+      <div class="user-strip hidden" id="userStrip">
+        <span id="userEmail"></span>
+        <button class="ghost-button" id="signOutButton" type="button">Uitloggen</button>
+      </div>
     </header>
 
-    <nav class="tabs" aria-label="Hoofdmenu">
+    <nav class="tabs hidden" id="mainTabs" aria-label="Hoofdmenu">
       <button class="tab active" data-view="calendarView" type="button">Kalender</button>
       <button class="tab" data-view="listView" type="button">Lijst</button>
       <button class="tab" data-view="orgView" type="button">Organisaties</button>
     </nav>
 
     <main>
-      <section class="summary-grid" id="summaryGrid" aria-label="Saldo per organisatie"></section>
-
-      <section class="view active" id="calendarView">
-        <div class="calendar-layout">
-          <section class="panel calendar-panel" aria-label="Kalender">
-            <div class="section-toolbar">
-              <button class="icon-button" id="prevMonth" type="button" aria-label="Vorige maand">&lsaquo;</button>
-              <h2 id="monthLabel">Maand</h2>
-              <button class="icon-button" id="nextMonth" type="button" aria-label="Volgende maand">&rsaquo;</button>
-            </div>
-            <div class="weekday-row" aria-hidden="true">
-              <span>Ma</span>
-              <span>Di</span>
-              <span>Wo</span>
-              <span>Do</span>
-              <span>Vr</span>
-              <span>Za</span>
-              <span>Zo</span>
-            </div>
-            <div class="calendar-grid" id="calendarGrid"></div>
-          </section>
-
-          <aside class="panel day-panel">
-            <div class="section-heading">
-              <span class="eyebrow">Geselecteerde dag</span>
-              <h2 id="selectedDateLabel">Vandaag</h2>
-            </div>
-
-            <form id="entryForm" class="stack">
-              <label>
-                Organisatie
-                <select id="entryOrg" required></select>
-              </label>
-              <div class="segmented" role="radiogroup" aria-label="Soort uren">
-                <label>
-                  <input type="radio" name="entryType" value="leave" checked>
-                  <span>Verlof</span>
-                </label>
-                <label>
-                  <input type="radio" name="entryType" value="overtime">
-                  <span>Overuren</span>
-                </label>
-              </div>
-              <label>
-                Uren
-                <input id="entryHours" inputmode="decimal" min="0.25" step="0.25" type="number" placeholder="8" required>
-              </label>
-              <label>
-                Notitie
-                <input id="entryNote" maxlength="80" type="text" placeholder="Bijv. halve dag of projectnaam">
-              </label>
-              <button class="primary-button" type="submit">Uren opslaan</button>
-            </form>
-
-            <div>
-              <h3>Uren op deze dag</h3>
-              <div class="entries-mini" id="selectedDayEntries"></div>
-            </div>
-          </aside>
+      <section class="auth-panel" id="authView">
+        <div class="section-heading">
+          <span class="eyebrow">Account</span>
+          <h2>Log in om je verlofuren te synchroniseren</h2>
         </div>
-      </section>
-
-      <section class="view" id="listView">
-        <section class="panel">
-          <div class="section-toolbar list-toolbar">
-            <div class="section-heading">
-              <span class="eyebrow">Overzicht</span>
-              <h2>Alle registraties</h2>
-            </div>
-            <div class="filters">
-              <select id="filterOrg" aria-label="Filter op organisatie"></select>
-              <select id="filterType" aria-label="Filter op type">
-                <option value="all">Alles</option>
-                <option value="leave">Verlof</option>
-                <option value="overtime">Overuren</option>
-              </select>
-            </div>
+        <form id="authForm" class="auth-form">
+          <label>
+            E-mail
+            <input id="authEmail" autocomplete="email" type="email" placeholder="jij@example.com" required>
+          </label>
+          <label>
+            Wachtwoord
+            <input id="authPassword" autocomplete="current-password" minlength="6" type="password" placeholder="Minimaal 6 tekens" required>
+          </label>
+          <div class="auth-actions">
+            <button class="primary-button" id="signInButton" type="submit">Inloggen</button>
           </div>
-          <div class="entry-list" id="entryList"></div>
+          <p class="auth-status" id="authStatus"></p>
+        </form>
+      </section>
+
+      <div class="app-content hidden" id="appContent">
+        <section class="summary-grid" id="summaryGrid" aria-label="Saldo per organisatie"></section>
+
+        <section class="view active" id="calendarView">
+          <div class="calendar-layout">
+            <section class="panel calendar-panel" aria-label="Kalender">
+              <div class="section-toolbar">
+                <button class="icon-button" id="prevMonth" type="button" aria-label="Vorige maand">&lsaquo;</button>
+                <h2 id="monthLabel">Maand</h2>
+                <button class="icon-button" id="nextMonth" type="button" aria-label="Volgende maand">&rsaquo;</button>
+              </div>
+              <div class="weekday-row" aria-hidden="true">
+                <span>Ma</span>
+                <span>Di</span>
+                <span>Wo</span>
+                <span>Do</span>
+                <span>Vr</span>
+                <span>Za</span>
+                <span>Zo</span>
+              </div>
+              <div class="calendar-grid" id="calendarGrid"></div>
+            </section>
+
+            <aside class="panel day-panel">
+              <div class="section-heading">
+                <span class="eyebrow">Geselecteerde dag</span>
+                <h2 id="selectedDateLabel">Vandaag</h2>
+              </div>
+
+              <form id="entryForm" class="stack">
+                <label>
+                  Organisatie
+                  <select id="entryOrg" required></select>
+                </label>
+                <div class="segmented" role="radiogroup" aria-label="Soort uren">
+                  <label>
+                    <input type="radio" name="entryType" value="leave" checked>
+                    <span>Verlof</span>
+                  </label>
+                  <label>
+                    <input type="radio" name="entryType" value="overtime">
+                    <span>Overuren</span>
+                  </label>
+                </div>
+                <label>
+                  Uren
+                  <input id="entryHours" inputmode="decimal" min="0.25" step="0.25" type="number" placeholder="8" required>
+                </label>
+                <label>
+                  Notitie
+                  <input id="entryNote" maxlength="80" type="text" placeholder="Bijv. halve dag of projectnaam">
+                </label>
+                <button class="primary-button" type="submit">Uren opslaan</button>
+              </form>
+
+              <div>
+                <h3>Uren op deze dag</h3>
+                <div class="entries-mini" id="selectedDayEntries"></div>
+              </div>
+            </aside>
+          </div>
         </section>
-      </section>
 
-      <section class="view" id="orgView">
-        <div class="org-layout">
+        <section class="view" id="listView">
           <section class="panel">
-            <div class="section-heading">
-              <span class="eyebrow">Nieuw</span>
-              <h2>Organisatie toevoegen</h2>
+            <div class="section-toolbar list-toolbar">
+              <div class="section-heading">
+                <span class="eyebrow">Overzicht</span>
+                <h2>Alle registraties</h2>
+              </div>
+              <div class="filters">
+                <select id="filterOrg" aria-label="Filter op organisatie"></select>
+                <select id="filterType" aria-label="Filter op type">
+                  <option value="all">Alles</option>
+                  <option value="leave">Verlof</option>
+                  <option value="overtime">Overuren</option>
+                </select>
+              </div>
             </div>
-            <form id="orgForm" class="stack">
-              <label>
-                Naam organisatie
-                <input id="orgName" maxlength="50" type="text" placeholder="Bijv. Praktijk, kantoor, freelance" required>
-              </label>
-              <label>
-                Beginsaldo verlofuren
-                <input id="orgLeaveStart" inputmode="decimal" min="0" step="0.25" type="number" placeholder="160" required>
-              </label>
-              <label>
-                Beginsaldo overuren
-                <input id="orgOvertimeStart" inputmode="decimal" min="0" step="0.25" type="number" placeholder="0" required>
-              </label>
-              <label>
-                Kleur
-                <input id="orgColor" type="color" value="#1d8f86">
-              </label>
-              <button class="primary-button" type="submit">Organisatie opslaan</button>
-            </form>
+            <div class="entry-list" id="entryList"></div>
           </section>
+        </section>
 
-          <section class="panel">
-            <div class="section-heading">
-              <span class="eyebrow">Beheer</span>
-              <h2>Werkorganisaties</h2>
-            </div>
-            <div class="org-list" id="orgList"></div>
-          </section>
-        </div>
-      </section>
+        <section class="view" id="orgView">
+          <div class="org-layout">
+            <section class="panel">
+              <div class="section-heading">
+                <span class="eyebrow">Nieuw</span>
+                <h2>Organisatie toevoegen</h2>
+              </div>
+              <form id="orgForm" class="stack">
+                <label>
+                  Naam organisatie
+                  <input id="orgName" maxlength="50" type="text" placeholder="Bijv. Praktijk, kantoor, freelance" required>
+                </label>
+                <label>
+                  Beginsaldo verlofuren
+                  <input id="orgLeaveStart" inputmode="decimal" min="0" step="0.25" type="number" placeholder="160" required>
+                </label>
+                <label>
+                  Beginsaldo overuren
+                  <input id="orgOvertimeStart" inputmode="decimal" min="0" step="0.25" type="number" placeholder="0" required>
+                </label>
+                <label>
+                  Kleur
+                  <input id="orgColor" type="color" value="#1d8f86">
+                </label>
+                <button class="primary-button" type="submit">Organisatie opslaan</button>
+              </form>
+            </section>
+
+            <section class="panel">
+              <div class="section-heading">
+                <span class="eyebrow">Beheer</span>
+                <h2>Werkorganisaties</h2>
+              </div>
+              <div class="org-list" id="orgList"></div>
+            </section>
+          </div>
+        </section>
+      </div>
     </main>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="app.js"></script>
+    <script type="module" src="app.js"></script>
   </body>
 </html>
