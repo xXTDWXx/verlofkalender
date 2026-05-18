@@ -140,13 +140,24 @@ main {
   gap: 10px;
 }
 
-.summary-card strong {
-  display: block;
-  margin-top: 8px;
-  font-size: 1.55rem;
+.summary-org-name {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+  font-weight: 850;
+}
+
+.summary-balance {
+  flex: 0 0 auto;
+  font-size: 1.2rem;
+  line-height: 1;
+  text-align: right;
 }
 
 .summary-card small {
+  display: block;
+  margin-top: 8px;
   color: var(--muted);
 }
 
