@@ -13,16 +13,6 @@ Een eenvoudige webapp om verlofuren en overuren per werkorganisatie te plannen e
 - Responsive layout voor desktop, tablet en mobiel
 - Lokale opslag in de browser via `localStorage`
 
-## Lokaal draaien
+## Gebruiken
 
-Open `index.html` direct in je browser, of start de PowerShell-server:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\server.ps1 -Port 5173
-```
-
-Daarna open je:
-
-```text
-http://localhost:5173/
-```
+Open `index.html` direct in je browser of host de map als statische website, bijvoorbeeld via GitHub Pages.
