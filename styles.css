@@ -513,6 +513,20 @@ select:focus {
   color: var(--text);
 }
 
+#signOutButton {
+  padding: 7px 10px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+#signOutButton:hover,
+#signOutButton:focus-visible {
+  border-color: var(--brand);
+  color: var(--brand-dark);
+  outline: none;
+}
+
 .day-panel {
   position: sticky;
   top: 112px;
@@ -667,17 +681,30 @@ select:focus {
     padding: 14px 14px;
   }
 
+  .app-header > div:first-child {
+    padding-right: 82px;
+  }
+
   .app-header h1 {
     font-size: 1.32rem;
   }
 
   .user-strip {
-    justify-content: space-between;
-    width: 100%;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    justify-content: flex-end;
+    width: auto;
   }
 
   .user-strip span {
-    max-width: calc(100vw - 132px);
+    display: none;
+  }
+
+  #signOutButton {
+    min-height: 28px;
+    padding: 5px 8px;
+    font-size: 0.68rem;
   }
 
   .balance-strip {
@@ -743,48 +770,49 @@ select:focus {
   }
 
   .calendar-panel {
-    padding: 10px;
+    padding: 8px;
   }
 
   .weekday-row {
-    display: none;
+    display: grid;
+    gap: 4px;
+    margin-bottom: 5px;
+    font-size: 0.62rem;
   }
 
   .calendar-grid {
-    grid-template-columns: 1fr;
-    gap: 6px;
-  }
-
-  .calendar-day.outside {
-    display: none;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 4px;
   }
 
   .calendar-day {
-    display: grid;
-    grid-template-columns: 38px minmax(0, 1fr);
-    gap: 8px;
-    min-height: 0;
-    padding: 8px;
-    align-items: start;
+    min-height: 58px;
+    padding: 4px;
   }
 
   .date-number {
-    min-width: 30px;
-    width: 30px;
-    height: 30px;
-    font-size: 0.86rem;
+    min-width: 22px;
+    width: 22px;
+    height: 22px;
+    font-size: 0.72rem;
   }
 
   .day-totals {
     min-width: 0;
-    margin-top: 0;
+    gap: 3px;
+    margin-top: 3px;
   }
 
   .day-pill {
-    justify-content: space-between;
-    min-height: 28px;
-    padding: 4px 6px;
-    font-size: 0.72rem;
+    min-height: 18px;
+    padding: 2px 3px;
+    font-size: 0.56rem;
+    line-height: 1.15;
+  }
+
+  .day-more {
+    padding: 2px 3px;
+    font-size: 0.56rem;
   }
 
   .list-toolbar {
@@ -816,6 +844,40 @@ select:focus {
   .danger-button,
   .ghost-button {
     width: 100%;
+  }
+
+  #signOutButton {
+    width: auto;
+  }
+
+  .calendar-panel {
+    padding: 6px;
+  }
+
+  .weekday-row,
+  .calendar-grid {
+    gap: 3px;
+  }
+
+  .calendar-day {
+    min-height: 52px;
+    padding: 3px;
+  }
+
+  .date-number {
+    min-width: 20px;
+    width: 20px;
+    height: 20px;
+    font-size: 0.68rem;
+  }
+
+  .day-pill {
+    min-height: 16px;
+    font-size: 0.52rem;
+  }
+
+  .pill-hours {
+    display: none;
   }
 
   .auth-actions {
