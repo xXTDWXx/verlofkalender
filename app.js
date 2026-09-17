@@ -3,6 +3,8 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 const SUPABASE_URL = "https://olntwuzkmxoyzaursdoz.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_XfSKuuPObdCSB6h2TchoaQ_GdUZ8ns7";
 const LEGACY_STORAGE_KEY = "verlofuren-planner-state-v1";
+const VOV = Object.freeze({ hours: 120, start: "2026-09-21", end: "2027-06-30" });
+const ENTRY_LABELS = { leave: "Verlof", overtime: "Overuren", vov: "VOV" };
 
 const supabaseClient = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const monthFormatter = new Intl.DateTimeFormat("nl-NL", { month: "long", year: "numeric" });
@@ -40,6 +42,7 @@ const elements = {
   entryOrg: document.querySelector("#entryOrg"),
   entryHours: document.querySelector("#entryHours"),
   entryNote: document.querySelector("#entryNote"),
+  vovHint: document.querySelector("#vovHint"),
   selectedDayEntries: document.querySelector("#selectedDayEntries"),
   filterOrg: document.querySelector("#filterOrg"),
   filterType: document.querySelector("#filterType"),
@@ -95,6 +98,7 @@ elements.orgForm.addEventListener("submit", async (event) => {
 
 elements.filterOrg.addEventListener("change", renderEntryList);
 elements.filterType.addEventListener("change", renderEntryList);
+elements.entryForm.addEventListener("change", renderVovHint);
 
 elements.calendarGrid.addEventListener("click", (event) => {
   const dayButton = event.target.closest(".calendar-day");
@@ -272,6 +276,18 @@ async function createEntry() {
     return;
   }
 
+  if (!Object.hasOwn(ENTRY_LABELS, type)) return;
+  if (type === "vov") {
+    if (!isVovDate(selectedDate)) {
+      showToast("VOV is enkel geldig van 21/09/2026 t.e.m. 30/06/2027.");
+      return;
+    }
+    if (roundHours(hours) > getVovBalance().remaining) {
+      showToast(`Onvoldoende VOV-saldo. Nog ${formatHours(getVovBalance().remaining)} over.`);
+      return;
+    }
+  }
+
   setBusy(true, "Uren opslaan...");
   const { data, error } = await supabaseClient
     .from("entries")
@@ -288,6 +304,11 @@ async function createEntry() {
 
   if (error) {
     showToast("Uren opslaan mislukt.");
+    if (type === "vov") {
+      await loadRemoteData();
+      showToast(error.message.includes("VOV") ? error.message : "VOV opslaan mislukt. Probeer opnieuw.");
+      return;
+    }
     showAuthStatus(error.message, true);
     setBusy(false);
     return;
@@ -296,7 +317,7 @@ async function createEntry() {
   state.entries.push(mapEntryFromDb(data));
   elements.entryHours.value = "";
   elements.entryNote.value = "";
-  showToast(type === "leave" ? "Verlofuren opgeslagen." : "Overuren opgeslagen.");
+  showToast(type === "vov" ? "VOV-uren opgeslagen." : type === "leave" ? "Verlofuren opgeslagen." : "Overuren opgeslagen.");
   render();
   setBusy(false);
 }
@@ -360,6 +381,7 @@ function render() {
   renderSelectedDay();
   renderEntryList();
   renderOrganizations();
+  renderVovHint();
 }
 
 function switchView(viewId) {
@@ -393,13 +415,29 @@ function renderBalances() {
       </article>
     `).join("")
     : `<div class="empty-state">Nog geen organisaties. Voeg er een toe om te starten.</div>`;
+
+  if (currentUser) {
+    const { used, remaining } = getVovBalance();
+    const today = toDateInputValue(new Date());
+    const expired = today > VOV.end;
+    elements.summaryGrid.insertAdjacentHTML("beforeend", `
+      <article class="summary-card vov-card">
+        <header><span class="summary-org-name">VOV</span><strong class="summary-balance">${formatHours(expired ? 0 : remaining)}</strong></header>
+        <small>Vlaams opleidingsverlof · ${formatHours(used)} van ${formatHours(VOV.hours)} ingepland / opgenomen</small>
+        <small>21/09/2026 t.e.m. 30/06/2027</small>
+        <small>${expired ? `Verlopen · ${formatHours(remaining)} niet gebruikt` : today < VOV.start ? "Beschikbaar vanaf 21/09/2026 · nu al inplanbaar" : "Resterend voor deze opleidingsperiode"}</small>
+      </article>
+    `);
+  }
 }
 
 function renderOrgOptions() {
   const orgOptions = state.organizations
     .map((org) => `<option value="${org.id}">${escapeHtml(org.name)}</option>`)
     .join("");
+  const previousOrg = elements.entryOrg.value;
   elements.entryOrg.innerHTML = orgOptions;
+  if (state.organizations.some((org) => org.id === previousOrg)) elements.entryOrg.value = previousOrg;
 
   const previousFilter = elements.filterOrg.value || "all";
   elements.filterOrg.innerHTML = `<option value="all">Alle organisaties</option>${orgOptions}`;
@@ -426,11 +464,10 @@ function renderCalendar() {
         <span class="date-number">${day.getDate()}</span>
         <span class="day-totals">
           ${visibleEntries.map((entry) => {
-            const isLeave = entry.type === "leave";
-            const fallbackLabel = isLeave ? "Verlof" : "Overuren";
-            const label = entry.note || fallbackLabel;
-            const sign = isLeave ? "-" : "+";
-            return `<span class="day-pill" style="background:var(--${entry.type === "leave" ? "leave" : "overtime"})"><span class="pill-note">${escapeHtml(label)}</span><span class="pill-hours">${sign}${formatHours(entry.hours)}</span></span>`;
+            const fallbackLabel = ENTRY_LABELS[entry.type];
+            const label = entry.type === "vov" ? `VOV${entry.note ? ` · ${entry.note}` : ""}` : entry.note || fallbackLabel;
+            const sign = entry.type === "overtime" ? "+" : "-";
+            return `<span class="day-pill" style="background:var(--${entry.type})"><span class="pill-note">${escapeHtml(label)}</span><span class="pill-hours">${sign}${formatHours(entry.hours)}</span></span>`;
           }).join("")}
           ${hiddenCount > 0 ? `<span class="day-more">+${hiddenCount} meer</span>` : ""}
         </span>
@@ -491,9 +528,8 @@ function renderOrganizations() {
 function renderEntryItem(entry) {
   const org = state.organizations.find((item) => item.id === entry.organizationId);
   const date = parseLocalDate(entry.date);
-  const isLeave = entry.type === "leave";
-  const sign = isLeave ? "-" : "+";
-  const title = isLeave ? "Verlof" : "Overuren";
+  const sign = entry.type === "overtime" ? "+" : "-";
+  const title = ENTRY_LABELS[entry.type];
 
   return `
     <article class="entry-item">
@@ -636,6 +672,27 @@ function calculateBalance(org, entries) {
     overtimeAdded: roundHours(overtimeAdded),
     balance: roundHours(balance),
   };
+}
+
+function isVovDate(date) {
+  return date >= VOV.start && date <= VOV.end;
+}
+
+function getVovBalance() {
+  const used = roundHours(state.entries
+    .filter((entry) => entry.type === "vov" && isVovDate(entry.date))
+    .reduce((sum, entry) => sum + entry.hours, 0));
+  return { used, remaining: roundHours(VOV.hours - used) };
+}
+
+function renderVovHint() {
+  const isVov = new FormData(elements.entryForm).get("entryType") === "vov";
+  elements.vovHint.classList.toggle("hidden", !isVov);
+  elements.vovHint.textContent = isVovDate(selectedDate)
+    ? `Vlaams opleidingsverlof · nog ${formatHours(getVovBalance().remaining)} van 120u. Geldig t.e.m. 30/06/2027.`
+    : "VOV is enkel geldig van 21/09/2026 t.e.m. 30/06/2027. Selecteer een dag binnen deze periode.";
+  if (isVov) elements.entryHours.max = Math.max(0, getVovBalance().remaining);
+  else elements.entryHours.removeAttribute("max");
 }
 
 function getCalendarDays(monthDate) {

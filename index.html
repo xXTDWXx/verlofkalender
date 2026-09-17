@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Verlofuren planner</title>
-    <link rel="stylesheet" href="styles.css?v=20260518-mobile1">
+    <link rel="stylesheet" href="styles.css?v=20260917-vov1">
   </head>
   <body>
     <header class="app-header">
@@ -13,7 +13,7 @@
         <h1>Agenda voor verlof en overuren</h1>
       </div>
       <div class="balance-strip" aria-live="polite">
-        <span>Totaalsaldo</span>
+        <span>Saldo verlof + overuren</span>
         <strong id="totalBalance">0u</strong>
       </div>
       <div class="user-strip hidden" id="userStrip">
@@ -93,7 +93,12 @@
                     <input type="radio" name="entryType" value="overtime">
                     <span>Overuren</span>
                   </label>
+                  <label>
+                    <input type="radio" name="entryType" value="vov" aria-describedby="vovHint">
+                    <span>VOV</span>
+                  </label>
                 </div>
+                <p id="vovHint" class="vov-hint hidden" aria-live="polite"></p>
                 <label>
                   Uren
                   <input id="entryHours" inputmode="decimal" min="0.25" step="0.25" type="number" placeholder="8" required>
@@ -126,6 +131,7 @@
                   <option value="all">Alles</option>
                   <option value="leave">Verlof</option>
                   <option value="overtime">Overuren</option>
+                  <option value="vov">VOV</option>
                 </select>
               </div>
             </div>
@@ -174,6 +180,6 @@
     </main>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="app.js?v=20260518-auth2"></script>
+    <script type="module" src="app.js?v=20260917-vov1"></script>
   </body>
 </html>

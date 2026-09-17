@@ -9,6 +9,7 @@
   --brand-dark: #116a64;
   --leave: #bd3f32;
   --overtime: #1f6fb2;
+  --vov: #7954ad;
   --warning: #a15c00;
   --shadow: 0 12px 30px rgba(28, 37, 54, 0.08);
 }
@@ -450,7 +451,7 @@ select:focus {
 
 .segmented {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -588,6 +589,32 @@ select:focus {
 
 .type-badge.overtime {
   background: var(--overtime);
+}
+
+.type-badge.vov {
+  background: var(--vov);
+}
+
+.vov-card {
+  border-left: 4px solid var(--vov);
+}
+
+.vov-card .summary-balance {
+  color: var(--vov);
+}
+
+.vov-hint {
+  margin: 0;
+  padding: 10px;
+  border-radius: 8px;
+  background: #f4effb;
+  color: #5d388f;
+  font-size: 0.85rem;
+}
+
+.segmented input:focus-visible + span {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 
 .filters {
