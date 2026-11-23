@@ -24,6 +24,7 @@ let currentUser = null;
 let isLoading = false;
 
 const elements = {
+  balanceLabel: document.querySelector("#balanceLabel"),
   totalBalance: document.querySelector("#totalBalance"),
   authView: document.querySelector("#authView"),
   authForm: document.querySelector("#authForm"),
@@ -66,11 +67,13 @@ document.querySelectorAll(".tab").forEach((tab) => {
 
 document.querySelector("#prevMonth").addEventListener("click", () => {
   visibleMonth = addMonths(visibleMonth, -1);
+  selectedDate = toDateInputValue(visibleMonth);
   render();
 });
 
 document.querySelector("#nextMonth").addEventListener("click", () => {
   visibleMonth = addMonths(visibleMonth, 1);
+  selectedDate = toDateInputValue(visibleMonth);
   render();
 });
 
@@ -197,7 +200,7 @@ async function loadRemoteData() {
   const [organizationsResult, entriesResult] = await Promise.all([
     supabaseClient
       .from("organizations")
-      .select("id,name,leave_start,overtime_start,color,created_at")
+      .select("id,name,leave_start,annual_leave_hours,overtime_start,color,created_at")
       .eq("user_id", currentUser.id)
       .order("created_at", { ascending: true }),
     supabaseClient
@@ -253,7 +256,7 @@ async function createOrganization() {
       overtime_start: roundHours(overtimeStart),
       color: elements.orgColor.value,
     })
-    .select("id,name,leave_start,overtime_start,color,created_at")
+    .select("id,name,leave_start,annual_leave_hours,overtime_start,color,created_at")
     .single();
 
   if (error) {
@@ -425,15 +428,17 @@ function switchView(viewId) {
 }
 
 function renderBalances() {
+  const year = visibleMonth.getFullYear();
+  elements.balanceLabel.textContent = `Saldo verlof + overuren · ${year}`;
   const totals = state.organizations.map((org) => {
     const entries = state.entries.filter((entry) => entry.organizationId === org.id);
-    return { org, ...calculateBalance(org, entries) };
+    return { org, ...calculateBalance(org, entries, year) };
   });
   const totalBalance = totals.reduce((sum, item) => sum + item.balance, 0);
 
   elements.totalBalance.textContent = formatHours(totalBalance);
   elements.summaryGrid.innerHTML = totals.length
-    ? totals.map(({ org, balance, leaveUsed, overtimeAdded }) => `
+    ? totals.map(({ org, balance, leaveStart, leaveUsed, overtimeAdded }) => `
       <article class="summary-card">
         <header>
           <span class="summary-org-name">
@@ -442,7 +447,7 @@ function renderBalances() {
           </span>
           <strong class="summary-balance">${formatHours(balance)}</strong>
         </header>
-        <small>${formatHours(leaveUsed)} verlof gebruikt &middot; ${formatHours(overtimeAdded)} overuren erbij</small>
+        <small>${year} · ${formatHours(leaveUsed)} van ${formatHours(leaveStart)} verlof ingepland / opgenomen &middot; ${formatHours(overtimeAdded)} overuren erbij</small>
       </article>
     `).join("")
     : `<div class="empty-state">Nog geen organisaties. Voeg er een toe om te starten.</div>`;
@@ -541,10 +546,11 @@ function renderEntryList() {
 }
 
 function renderOrganizations() {
+  const year = visibleMonth.getFullYear();
   elements.orgList.innerHTML = state.organizations.length
     ? state.organizations.map((org) => {
       const entries = state.entries.filter((entry) => entry.organizationId === org.id);
-      const balance = calculateBalance(org, entries);
+      const balance = calculateBalance(org, entries, year);
       const hasEntries = entries.length > 0;
       return `
         <article class="org-item">
@@ -556,10 +562,10 @@ function renderOrganizations() {
             <button class="danger-button" type="button" data-delete-org="${org.id}" ${hasEntries ? "disabled title='Verwijder eerst de registraties'" : ""}>Verwijderen</button>
           </header>
           <div class="org-stats">
-            <span>Saldo<strong>${formatHours(balance.balance)}</strong></span>
-            <span>Start verlof<strong>${formatHours(org.leaveStart)}</strong></span>
-            <span>Start overuren<strong>${formatHours(org.overtimeStart)}</strong></span>
-            <span>Registraties<strong>${entries.length}</strong></span>
+            <span>Saldo ${year}<strong>${formatHours(balance.balance)}</strong></span>
+            <span>Start verlof<strong>${formatHours(balance.leaveStart)}</strong></span>
+            <span>Start overuren<strong>${formatHours(balance.overtimeStart)}</strong></span>
+            <span>Registraties alle jaren<strong>${entries.length}</strong></span>
           </div>
         </article>
       `;
@@ -683,6 +689,7 @@ function mapOrganizationFromDb(row) {
     id: row.id,
     name: row.name,
     leaveStart: Number(row.leave_start),
+    annualLeaveHours: row.annual_leave_hours == null ? null : Number(row.annual_leave_hours),
     overtimeStart: Number(row.overtime_start),
     color: row.color || "#1d8f86",
     createdAt: row.created_at,
@@ -702,15 +709,22 @@ function mapEntryFromDb(row) {
   };
 }
 
-function calculateBalance(org, entries) {
-  const leaveUsed = entries
+function calculateBalance(org, entries, year) {
+  const firstYear = Number(org.createdAt.slice(0, 4));
+  const yearEntries = entries.filter((entry) => entry.date.startsWith(year + "-"));
+  const leaveStart = year < firstYear ? 0
+    : year === firstYear ? org.leaveStart : (org.annualLeaveHours ?? org.leaveStart);
+  const overtimeStart = year === firstYear ? org.overtimeStart : 0;
+  const leaveUsed = yearEntries
     .filter((entry) => entry.type === "leave")
     .reduce((sum, entry) => sum + entry.hours, 0);
-  const overtimeAdded = entries
+  const overtimeAdded = yearEntries
     .filter((entry) => entry.type === "overtime")
     .reduce((sum, entry) => sum + entry.hours, 0);
-  const balance = org.leaveStart + org.overtimeStart + overtimeAdded - leaveUsed;
+  const balance = leaveStart + overtimeStart + overtimeAdded - leaveUsed;
   return {
+    leaveStart,
+    overtimeStart,
     leaveUsed: roundHours(leaveUsed),
     overtimeAdded: roundHours(overtimeAdded),
     balance: roundHours(balance),
