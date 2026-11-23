@@ -311,7 +311,7 @@ async function createEntry() {
       return;
     }
     if (getZvBalance().remaining < 1) {
-      showToast(`Onvoldoende ZV-saldo. Nog ${formatDays(getZvBalance().remaining)} over.`);
+      showToast(`Onvoldoende ZV-saldo. Nog ${formatZvWeeks(getZvBalance().remaining)} over.`);
       return;
     }
     if (getZvDayRemaining(selectedDate) < 1) {
@@ -468,10 +468,10 @@ function renderBalances() {
     const zvExpired = today > ZV.end;
     elements.summaryGrid.insertAdjacentHTML("beforeend", `
       <article class="summary-card zv-card">
-        <header><span class="summary-org-name">ZV · 2027</span><strong class="summary-balance">${formatDays(zvExpired ? 0 : zv.remaining)}</strong></header>
-        <small>${formatDays(zv.used)} van ${formatDays(ZV.days)} ingepland / opgenomen</small>
+        <header><span class="summary-org-name">ZV · 2027</span><strong class="summary-balance">${formatZvWeeks(zvExpired ? 0 : zv.remaining)}</strong></header>
+        <small>${formatZvWeeks(zv.used)} van ${formatZvWeeks(ZV.days)} ingepland / opgenomen</small>
         <small>01/01/2027 t.e.m. 31/12/2027</small>
-        <small>${zvExpired ? `Verlopen · ${formatDays(zv.remaining)} niet gebruikt` : today < ZV.start ? "Beschikbaar in 2027 · nu al inplanbaar" : "Resterend voor 2027"}</small>
+        <small>${zvExpired ? `Verlopen · ${formatZvWeeks(zv.remaining)} niet gebruikt` : today < ZV.start ? "Beschikbaar in 2027 · nu al inplanbaar" : "Resterend voor 2027"}</small>
         ${zvExpired ? "" : '<button class="ghost-button" type="button" data-plan-zv>Plan ZV in 2027</button>'}
       </article>
     `);
@@ -757,7 +757,7 @@ function renderAllowanceHints() {
   elements.entrySubmit.textContent = isZv ? "ZV opslaan" : "Uren opslaan";
   elements.zvHint.classList.toggle("hidden", !isZv);
   elements.zvHint.textContent = isZvDate(selectedDate)
-    ? `ZV · nog ${formatDays(getZvBalance().remaining)} van 105 dagen. Elke gekozen datum telt als één volledige ZV-dag.`
+    ? `ZV · nog ${formatZvWeeks(getZvBalance().remaining)} van ${formatZvWeeks(ZV.days)}. Elke gekozen datum telt als één volledige ZV-dag.`
     : "ZV is enkel geldig van 01/01/2027 t.e.m. 31/12/2027. Selecteer een dag in 2027; je kunt nu al inplannen.";
   elements.vovHint.classList.toggle("hidden", !isVov);
   elements.vovHint.textContent = isVovDate(selectedDate)
@@ -783,6 +783,15 @@ function getZvDayRemaining(date) {
   return roundHours(1 - state.entries
     .filter((entry) => entry.type === "zv" && entry.date === date)
     .reduce((sum, entry) => sum + entry.days, 0));
+}
+
+function formatZvWeeks(totalDays) {
+  const weeks = Math.floor(totalDays / 7);
+  const days = totalDays % 7;
+  const weekLabel = `${weeks} ${weeks === 1 ? "week" : "weken"}`;
+  if (days === 0) return weekLabel;
+  if (weeks === 0) return formatDays(days);
+  return `${weekLabel} en ${formatDays(days)}`;
 }
 
 function formatDays(value) {

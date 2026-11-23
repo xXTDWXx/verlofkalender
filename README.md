@@ -25,7 +25,7 @@ De VOV-databasewijziging staat in `db/vov.sql` en is toegepast op de gekoppelde 
 
 ## ZV in 2027
 
-- Apart saldo van 105 dagen per account, gedeeld over alle organisaties.
+- Apart saldo van 15 weken (105 kalenderdagen) per account, gedeeld over alle organisaties.
 - Alleen geldig van 1 januari tot en met 31 december 2027, nu al inplanbaar.
 - Gebruik **Plan ZV in 2027** om meteen naar de kalender en ZV-invoer te gaan.
 - Elke gekozen kalenderdatum telt als één volledige ZV-dag, maximaal één keer per datum.
