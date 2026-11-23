@@ -124,7 +124,7 @@ document.addEventListener("click", async (event) => {
     elements.entryHours.value = "";
     switchView("calendarView");
     render();
-    elements.entryHours.focus();
+    elements.entrySubmit.focus();
     return;
   }
   const deleteEntryButton = event.target.closest("[data-delete-entry]");
@@ -278,8 +278,8 @@ async function createEntry() {
   if (!currentUser || isLoading) return;
 
   const organizationId = elements.entryOrg.value;
-  const hours = Number.parseFloat(elements.entryHours.value);
   const type = new FormData(elements.entryForm).get("entryType");
+  const hours = Number.parseFloat(elements.entryHours.value);
   const note = elements.entryNote.value.trim();
 
   if (!organizationId) {
@@ -288,8 +288,8 @@ async function createEntry() {
     return;
   }
 
-  if (!Number.isFinite(hours) || hours <= 0) {
-    showToast(type === "zv" ? "Vul een positief aantal dagen in." : "Vul een positief aantal uren in.");
+  if (type !== "zv" && (!Number.isFinite(hours) || hours <= 0)) {
+    showToast("Vul een positief aantal uren in.");
     return;
   }
 
@@ -310,11 +310,11 @@ async function createEntry() {
       showToast("ZV is enkel geldig van 01/01/2027 t.e.m. 31/12/2027.");
       return;
     }
-    if (roundHours(hours) > getZvBalance().remaining) {
+    if (getZvBalance().remaining < 1) {
       showToast(`Onvoldoende ZV-saldo. Nog ${formatDays(getZvBalance().remaining)} over.`);
       return;
     }
-    if (roundHours(hours) > getZvDayRemaining(selectedDate)) {
+    if (getZvDayRemaining(selectedDate) < 1) {
       showToast("Je kunt maximaal 1 dag ZV per kalenderdag inplannen.");
       return;
     }
@@ -329,7 +329,7 @@ async function createEntry() {
       entry_date: selectedDate,
       entry_type: type,
       hours: type === "zv" ? 0 : roundHours(hours),
-      days: type === "zv" ? roundHours(hours) : null,
+      days: type === "zv" ? 1 : null,
       note,
     })
     .select("id,organization_id,entry_date,entry_type,hours,days,note,created_at")
@@ -351,7 +351,7 @@ async function createEntry() {
   state.entries.push(mapEntryFromDb(data));
   elements.entryHours.value = "";
   elements.entryNote.value = "";
-  showToast(type === "zv" ? "ZV-dagen opgeslagen." : type === "vov" ? "VOV-uren opgeslagen." : type === "leave" ? "Verlofuren opgeslagen." : "Overuren opgeslagen.");
+  showToast(type === "zv" ? "ZV-dag opgeslagen." : type === "vov" ? "VOV-uren opgeslagen." : type === "leave" ? "Verlofuren opgeslagen." : "Overuren opgeslagen.");
   render();
   setBusy(false);
 }
@@ -750,18 +750,20 @@ function renderAllowanceHints() {
   const unit = isZv ? "days" : "hours";
   if (previousUnit && previousUnit !== unit) elements.entryHours.value = "";
   elements.entryHours.dataset.unit = unit;
+  elements.entryHours.readOnly = isZv;
+  if (isZv) elements.entryHours.value = "1";
   elements.entryQuantityLabel.textContent = isZv ? "Dagen" : "Uren";
   elements.entryHours.placeholder = isZv ? "1" : "8";
   elements.entrySubmit.textContent = isZv ? "ZV opslaan" : "Uren opslaan";
   elements.zvHint.classList.toggle("hidden", !isZv);
   elements.zvHint.textContent = isZvDate(selectedDate)
-    ? `ZV · nog ${formatDays(getZvBalance().remaining)} van 105 dagen. Maximaal 1 dag per datum, ook gedeeltelijk (bijv. 0,5).`
+    ? `ZV · nog ${formatDays(getZvBalance().remaining)} van 105 dagen. Elke gekozen datum telt als één volledige ZV-dag.`
     : "ZV is enkel geldig van 01/01/2027 t.e.m. 31/12/2027. Selecteer een dag in 2027; je kunt nu al inplannen.";
   elements.vovHint.classList.toggle("hidden", !isVov);
   elements.vovHint.textContent = isVovDate(selectedDate)
     ? `Vlaams opleidingsverlof · nog ${formatHours(getVovBalance().remaining)} van 120u. Geldig t.e.m. 30/06/2027.`
     : "VOV is enkel geldig van 21/09/2026 t.e.m. 30/06/2027. Selecteer een dag binnen deze periode.";
-  if (isZv) elements.entryHours.max = isZvDate(selectedDate) ? Math.max(0, Math.min(getZvBalance().remaining, getZvDayRemaining(selectedDate))) : 0;
+  if (isZv) elements.entryHours.max = 1;
   else if (isVov) elements.entryHours.max = Math.max(0, getVovBalance().remaining);
   else elements.entryHours.removeAttribute("max");
 }

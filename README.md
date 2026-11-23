@@ -28,7 +28,7 @@ De VOV-databasewijziging staat in `db/vov.sql` en is toegepast op de gekoppelde 
 - Apart saldo van 105 dagen per account, gedeeld over alle organisaties.
 - Alleen geldig van 1 januari tot en met 31 december 2027, nu al inplanbaar.
 - Gebruik **Plan ZV in 2027** om meteen naar de kalender en ZV-invoer te gaan.
-- Invoer in dagen (ook gedeeltelijk), maximaal 1 dag per kalenderdatum.
+- Elke gekozen kalenderdatum telt als één volledige ZV-dag, maximaal één keer per datum.
 - Ingeplande dagen gaan van het saldo af; verwijderen geeft ze terug.
 - ZV telt niet mee in de gewone verlofuren, overuren of VOV.
 - Databasewijziging: `db/zv.sql`, toegepast op de gekoppelde Supabase-database. De database bewaakt de periode, de daglimiet en het totaalsaldo, ook over meerdere organisaties/toestellen.
