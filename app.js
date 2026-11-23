@@ -4,7 +4,8 @@ const SUPABASE_URL = "https://olntwuzkmxoyzaursdoz.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_XfSKuuPObdCSB6h2TchoaQ_GdUZ8ns7";
 const LEGACY_STORAGE_KEY = "verlofuren-planner-state-v1";
 const VOV = Object.freeze({ hours: 120, start: "2026-09-21", end: "2027-06-30" });
-const ENTRY_LABELS = { leave: "Verlof", overtime: "Overuren", vov: "VOV" };
+const ZV = Object.freeze({ days: 105, start: "2027-01-01", end: "2027-12-31" });
+const ENTRY_LABELS = { leave: "Verlof", overtime: "Overuren", vov: "VOV", zv: "ZV" };
 
 const supabaseClient = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const monthFormatter = new Intl.DateTimeFormat("nl-NL", { month: "long", year: "numeric" });
@@ -43,6 +44,9 @@ const elements = {
   entryHours: document.querySelector("#entryHours"),
   entryNote: document.querySelector("#entryNote"),
   vovHint: document.querySelector("#vovHint"),
+  zvHint: document.querySelector("#zvHint"),
+  entryQuantityLabel: document.querySelector("#entryQuantityLabel"),
+  entrySubmit: document.querySelector("#entrySubmit"),
   selectedDayEntries: document.querySelector("#selectedDayEntries"),
   filterOrg: document.querySelector("#filterOrg"),
   filterType: document.querySelector("#filterType"),
@@ -98,7 +102,7 @@ elements.orgForm.addEventListener("submit", async (event) => {
 
 elements.filterOrg.addEventListener("change", renderEntryList);
 elements.filterType.addEventListener("change", renderEntryList);
-elements.entryForm.addEventListener("change", renderVovHint);
+elements.entryForm.addEventListener("change", renderAllowanceHints);
 
 elements.calendarGrid.addEventListener("click", (event) => {
   const dayButton = event.target.closest(".calendar-day");
@@ -110,6 +114,16 @@ elements.calendarGrid.addEventListener("click", (event) => {
 });
 
 document.addEventListener("click", async (event) => {
+  if (event.target.closest("[data-plan-zv]")) {
+    selectedDate = isZvDate(selectedDate) ? selectedDate : ZV.start;
+    visibleMonth = startOfMonth(parseLocalDate(selectedDate));
+    elements.entryForm.querySelector('[value="zv"]').checked = true;
+    elements.entryHours.value = "";
+    switchView("calendarView");
+    render();
+    elements.entryHours.focus();
+    return;
+  }
   const deleteEntryButton = event.target.closest("[data-delete-entry]");
   const deleteOrgButton = event.target.closest("[data-delete-org]");
 
@@ -188,7 +202,7 @@ async function loadRemoteData() {
       .order("created_at", { ascending: true }),
     supabaseClient
       .from("entries")
-      .select("id,organization_id,entry_date,entry_type,hours,note,created_at")
+      .select("id,organization_id,entry_date,entry_type,hours,days,note,created_at")
       .eq("user_id", currentUser.id)
       .order("entry_date", { ascending: true })
       .order("created_at", { ascending: true }),
@@ -272,7 +286,7 @@ async function createEntry() {
   }
 
   if (!Number.isFinite(hours) || hours <= 0) {
-    showToast("Vul een positief aantal uren in.");
+    showToast(type === "zv" ? "Vul een positief aantal dagen in." : "Vul een positief aantal uren in.");
     return;
   }
 
@@ -288,7 +302,22 @@ async function createEntry() {
     }
   }
 
-  setBusy(true, "Uren opslaan...");
+  if (type === "zv") {
+    if (!isZvDate(selectedDate)) {
+      showToast("ZV is enkel geldig van 01/01/2027 t.e.m. 31/12/2027.");
+      return;
+    }
+    if (roundHours(hours) > getZvBalance().remaining) {
+      showToast(`Onvoldoende ZV-saldo. Nog ${formatDays(getZvBalance().remaining)} over.`);
+      return;
+    }
+    if (roundHours(hours) > getZvDayRemaining(selectedDate)) {
+      showToast("Je kunt maximaal 1 dag ZV per kalenderdag inplannen.");
+      return;
+    }
+  }
+
+  setBusy(true, type === "zv" ? "ZV opslaan..." : "Uren opslaan...");
   const { data, error } = await supabaseClient
     .from("entries")
     .insert({
@@ -296,17 +325,19 @@ async function createEntry() {
       organization_id: organizationId,
       entry_date: selectedDate,
       entry_type: type,
-      hours: roundHours(hours),
+      hours: type === "zv" ? 0 : roundHours(hours),
+      days: type === "zv" ? roundHours(hours) : null,
       note,
     })
-    .select("id,organization_id,entry_date,entry_type,hours,note,created_at")
+    .select("id,organization_id,entry_date,entry_type,hours,days,note,created_at")
     .single();
 
   if (error) {
     showToast("Uren opslaan mislukt.");
-    if (type === "vov") {
+    if (type === "vov" || type === "zv") {
       await loadRemoteData();
-      showToast(error.message.includes("VOV") ? error.message : "VOV opslaan mislukt. Probeer opnieuw.");
+      const label = ENTRY_LABELS[type];
+      showToast(error.message.includes(label) ? error.message : `${label} opslaan mislukt. Probeer opnieuw.`);
       return;
     }
     showAuthStatus(error.message, true);
@@ -317,7 +348,7 @@ async function createEntry() {
   state.entries.push(mapEntryFromDb(data));
   elements.entryHours.value = "";
   elements.entryNote.value = "";
-  showToast(type === "vov" ? "VOV-uren opgeslagen." : type === "leave" ? "Verlofuren opgeslagen." : "Overuren opgeslagen.");
+  showToast(type === "zv" ? "ZV-dagen opgeslagen." : type === "vov" ? "VOV-uren opgeslagen." : type === "leave" ? "Verlofuren opgeslagen." : "Overuren opgeslagen.");
   render();
   setBusy(false);
 }
@@ -381,7 +412,7 @@ function render() {
   renderSelectedDay();
   renderEntryList();
   renderOrganizations();
-  renderVovHint();
+  renderAllowanceHints();
 }
 
 function switchView(viewId) {
@@ -428,6 +459,17 @@ function renderBalances() {
         <small>${expired ? `Verlopen · ${formatHours(remaining)} niet gebruikt` : today < VOV.start ? "Beschikbaar vanaf 21/09/2026 · nu al inplanbaar" : "Resterend voor deze opleidingsperiode"}</small>
       </article>
     `);
+    const zv = getZvBalance();
+    const zvExpired = today > ZV.end;
+    elements.summaryGrid.insertAdjacentHTML("beforeend", `
+      <article class="summary-card zv-card">
+        <header><span class="summary-org-name">ZV · 2027</span><strong class="summary-balance">${formatDays(zvExpired ? 0 : zv.remaining)}</strong></header>
+        <small>${formatDays(zv.used)} van ${formatDays(ZV.days)} ingepland / opgenomen</small>
+        <small>01/01/2027 t.e.m. 31/12/2027</small>
+        <small>${zvExpired ? `Verlopen · ${formatDays(zv.remaining)} niet gebruikt` : today < ZV.start ? "Beschikbaar in 2027 · nu al inplanbaar" : "Resterend voor 2027"}</small>
+        ${zvExpired ? "" : '<button class="ghost-button" type="button" data-plan-zv>Plan ZV in 2027</button>'}
+      </article>
+    `);
   }
 }
 
@@ -465,9 +507,9 @@ function renderCalendar() {
         <span class="day-totals">
           ${visibleEntries.map((entry) => {
             const fallbackLabel = ENTRY_LABELS[entry.type];
-            const label = entry.type === "vov" ? `VOV${entry.note ? ` · ${entry.note}` : ""}` : entry.note || fallbackLabel;
+            const label = (entry.type === "vov" || entry.type === "zv") ? `${fallbackLabel}${entry.note ? ` · ${entry.note}` : ""}` : entry.note || fallbackLabel;
             const sign = entry.type === "overtime" ? "+" : "-";
-            return `<span class="day-pill" style="background:var(--${entry.type})"><span class="pill-note">${escapeHtml(label)}</span><span class="pill-hours">${sign}${formatHours(entry.hours)}</span></span>`;
+            return `<span class="day-pill" style="background:var(--${entry.type})"><span class="pill-note">${escapeHtml(label)}</span><span class="pill-hours">${sign}${formatEntryQuantity(entry)}</span></span>`;
           }).join("")}
           ${hiddenCount > 0 ? `<span class="day-more">+${hiddenCount} meer</span>` : ""}
         </span>
@@ -482,7 +524,7 @@ function renderSelectedDay() {
   elements.selectedDateLabel.textContent = capitalize(dateFormatter.format(date));
   elements.selectedDayEntries.innerHTML = entries.length
     ? entries.map(renderEntryItem).join("")
-    : `<div class="empty-state">Geen uren op deze dag.</div>`;
+    : `<div class="empty-state">Geen registraties op deze dag.</div>`;
 }
 
 function renderEntryList() {
@@ -534,7 +576,7 @@ function renderEntryItem(entry) {
   return `
     <article class="entry-item">
       <div>
-        <p class="entry-title">${title} ${sign}${formatHours(entry.hours)}</p>
+        <p class="entry-title">${title} ${sign}${formatEntryQuantity(entry)}</p>
         <div class="entry-meta">
           <span class="type-badge ${entry.type}">${title}</span>
           <span>${shortDateFormatter.format(date)}</span>
@@ -654,6 +696,7 @@ function mapEntryFromDb(row) {
     date: row.entry_date,
     type: row.entry_type,
     hours: Number(row.hours),
+    days: row.days == null ? null : Number(row.days),
     note: row.note || "",
     createdAt: row.created_at,
   };
@@ -685,14 +728,53 @@ function getVovBalance() {
   return { used, remaining: roundHours(VOV.hours - used) };
 }
 
-function renderVovHint() {
-  const isVov = new FormData(elements.entryForm).get("entryType") === "vov";
+function renderAllowanceHints() {
+  const type = new FormData(elements.entryForm).get("entryType");
+  const isVov = type === "vov";
+  const isZv = type === "zv";
+  const previousUnit = elements.entryHours.dataset.unit;
+  const unit = isZv ? "days" : "hours";
+  if (previousUnit && previousUnit !== unit) elements.entryHours.value = "";
+  elements.entryHours.dataset.unit = unit;
+  elements.entryQuantityLabel.textContent = isZv ? "Dagen" : "Uren";
+  elements.entryHours.placeholder = isZv ? "1" : "8";
+  elements.entrySubmit.textContent = isZv ? "ZV opslaan" : "Uren opslaan";
+  elements.zvHint.classList.toggle("hidden", !isZv);
+  elements.zvHint.textContent = isZvDate(selectedDate)
+    ? `ZV · nog ${formatDays(getZvBalance().remaining)} van 105 dagen. Maximaal 1 dag per datum, ook gedeeltelijk (bijv. 0,5).`
+    : "ZV is enkel geldig van 01/01/2027 t.e.m. 31/12/2027. Selecteer een dag in 2027; je kunt nu al inplannen.";
   elements.vovHint.classList.toggle("hidden", !isVov);
   elements.vovHint.textContent = isVovDate(selectedDate)
     ? `Vlaams opleidingsverlof · nog ${formatHours(getVovBalance().remaining)} van 120u. Geldig t.e.m. 30/06/2027.`
     : "VOV is enkel geldig van 21/09/2026 t.e.m. 30/06/2027. Selecteer een dag binnen deze periode.";
-  if (isVov) elements.entryHours.max = Math.max(0, getVovBalance().remaining);
+  if (isZv) elements.entryHours.max = isZvDate(selectedDate) ? Math.max(0, Math.min(getZvBalance().remaining, getZvDayRemaining(selectedDate))) : 0;
+  else if (isVov) elements.entryHours.max = Math.max(0, getVovBalance().remaining);
   else elements.entryHours.removeAttribute("max");
+}
+
+function isZvDate(date) {
+  return date >= ZV.start && date <= ZV.end;
+}
+
+function getZvBalance() {
+  const used = roundHours(state.entries
+    .filter((entry) => entry.type === "zv" && isZvDate(entry.date))
+    .reduce((sum, entry) => sum + entry.days, 0));
+  return { used, remaining: roundHours(ZV.days - used) };
+}
+
+function getZvDayRemaining(date) {
+  return roundHours(1 - state.entries
+    .filter((entry) => entry.type === "zv" && entry.date === date)
+    .reduce((sum, entry) => sum + entry.days, 0));
+}
+
+function formatDays(value) {
+  return `${roundHours(value).toLocaleString("nl-NL", { maximumFractionDigits: 2 })} ${value === 1 ? "dag" : "dagen"}`;
+}
+
+function formatEntryQuantity(entry) {
+  return entry.type === "zv" ? formatDays(entry.days) : formatHours(entry.hours);
 }
 
 function getCalendarDays(monthDate) {
@@ -778,3 +860,4 @@ function showToast(message) {
     elements.toast.classList.remove("show");
   }, 2600);
 }
+

@@ -9,6 +9,7 @@
   --brand-dark: #116a64;
   --leave: #bd3f32;
   --overtime: #1f6fb2;
+  --zv: #a15c00;
   --vov: #7954ad;
   --warning: #a15c00;
   --shadow: 0 12px 30px rgba(28, 37, 54, 0.08);
@@ -451,7 +452,7 @@ select:focus {
 
 .segmented {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -935,3 +936,11 @@ select:focus {
     max-width: calc(100vw - 24px);
   }
 }
+
+/* ZV uses days and a separate allowance for calendar year 2027. */
+.type-badge.zv { background: var(--zv); }
+.zv-card { border-left: 4px solid var(--zv); }
+.zv-card .summary-balance { color: var(--zv); }
+.zv-card .ghost-button { margin-top: 12px; }
+.zv-hint { margin: 0; padding: 10px; border-radius: 8px; background: #fff4df; color: #774400; font-size: 0.85rem; }
+
